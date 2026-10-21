@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zyxel-cli"
+version = "0.1.0"
+description = "CLI port and PoE control for Zyxel GS1200-5HP v2 switches"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = ["PyYAML>=6.0"]
+
+[project.scripts]
+zyxel = "zyxel_cli.cli:main"
+zyxelcli = "zyxel_cli.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

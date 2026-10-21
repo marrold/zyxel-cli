@@ -1,0 +1,30 @@
+default: workshop
+
+switches:
+  workshop:
+    host: 192.168.1.3
+    password: change-me
+    ports:
+      RFP1: 1
+      RFP2: 2
+    macros:
+      "enable RFP1":
+        enable: RFP1
+        disable: RFP2
+      "enable RFP2":
+        enable: RFP2
+        disable: RFP1
+
+  studio:
+    host: 192.168.1.4
+    password: change-me-too
+    ports:
+      MAIN: 1
+      BACKUP: 2
+    macros:
+      "enable MAIN":
+        enable: MAIN
+        disable: BACKUP
+      "enable BACKUP":
+        enable: BACKUP
+        disable: MAIN
