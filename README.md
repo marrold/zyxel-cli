@@ -121,6 +121,10 @@ zyxelcli disable RFP1
 zyxelcli enable RFP2
 ```
 
+If the natural command spelling matches a macro name, the macro takes
+priority. With the example above, `zyxelcli enable RFP1` runs the `enable
+RFP1` swap macro, enabling RFP1 while disabling RFP2 in the same request.
+
 Run either atomic swap macro using the requested shorthand:
 
 ```sh
@@ -128,7 +132,8 @@ zyxelcli "enable RFP1"
 zyxelcli "enable RFP2"
 ```
 
-The explicit spelling `zyxelcli run "enable RFP1"` also works. Add
+The quoted shorthand and explicit spelling `zyxelcli run "enable RFP1"` also
+work. Add
 `--dry-run` to preview a macro. Command-line host/password values override the
 environment and configuration file; `ZYXEL_PASSWORD` overrides the configured
 password.

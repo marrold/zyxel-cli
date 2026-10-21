@@ -69,10 +69,55 @@ def _print_status(state: PortConfig, config: SwitchConfig) -> None:
         print(f"{port:>4}  {(config.port_name(port) or '-'):<16}  {ethernet:<8}  {poe}")
 
 
-def _show_change(before: PortConfig, after: PortConfig, *, dry_run: bool) -> None:
+def _enabled(mask: int, port: int) -> str:
+    return "enabled" if mask & (1 << (port - 1)) else "disabled"
+
+
+def _show_change(
+    before: PortConfig, after: PortConfig, config: SwitchConfig, *, dry_run: bool
+) -> None:
+    if before == after:
+        print("No changes needed.")
+        return
     print("Proposed changes:" if dry_run else "Applied changes:")
-    print(f"port mask: {before.state_mask} -> {after.state_mask}")
-    print(f"PoE mask:  {before.poe_mask} -> {after.poe_mask}")
+    for port in range(1, 6):
+        changes = []
+        before_ethernet = _enabled(before.state_mask, port)
+        after_ethernet = _enabled(after.state_mask, port)
+        if before_ethernet != after_ethernet:
+            changes.append(f"Ethernet {before_ethernet} -> {after_ethernet}")
+        if port <= 4:
+            before_poe = _enabled(before.poe_mask, port)
+            after_poe = _enabled(after.poe_mask, port)
+            if before_poe != after_poe:
+                changes.append(f"PoE {before_poe} -> {after_poe}")
+        if changes:
+            name = config.port_name(port)
+            label = f"{name} (port {port})" if name else f"Port {port}"
+            print(f"  {label}: {'; '.join(changes)}")
+
+
+def _resolve_changes(
+    args: argparse.Namespace, config: SwitchConfig
+) -> tuple[list[int], list[int], str | None]:
+    macro_name: str | None = None
+    if args.command == "run":
+        macro_name = args.action
+        macro = config.macro(macro_name)
+    else:
+        candidate = f"{args.command} {' '.join(args.ports)}"
+        macro = config.find_macro(candidate)
+        if macro is not None:
+            macro_name = candidate
+
+    if macro is not None:
+        enable = [config.resolve_port(port) for port in macro.enable]
+        disable = [config.resolve_port(port) for port in macro.disable]
+    else:
+        ports = [config.resolve_port(port) for port in args.ports]
+        enable = ports if args.command == "enable" else []
+        disable = ports if args.command == "disable" else []
+    return enable, disable, macro_name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -90,19 +135,14 @@ def main(argv: list[str] | None = None) -> int:
                 _print_status(client.get_port_config(), config)
                 return 0
 
-            if args.command == "run":
-                macro = config.macro(args.action)
-                enable = [config.resolve_port(port) for port in macro.enable]
-                disable = [config.resolve_port(port) for port in macro.disable]
-            else:
-                ports = [config.resolve_port(port) for port in args.ports]
-                enable = ports if args.command == "enable" else []
-                disable = ports if args.command == "disable" else []
+            enable, disable, macro_name = _resolve_changes(args, config)
+            if macro_name is not None:
+                print(f"Macro: {macro_name}")
 
             before, after = client.set_port_states(
                 enable=enable, disable=disable, dry_run=args.dry_run
             )
-            _show_change(before, after, dry_run=args.dry_run)
+            _show_change(before, after, config, dry_run=args.dry_run)
             return 0
     except (AuthenticationError, ConfigError, ZyxelError, ValueError) as error:
         print(f"zyxelcli: error: {error}", file=sys.stderr)

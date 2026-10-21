@@ -41,15 +41,18 @@ class SwitchConfig:
         return next((name for name, port in self.ports.items() if port == number), None)
 
     def macro(self, name: str) -> Macro:
-        key = name.casefold()
-        match = next(
-            (macro for macro_name, macro in self.macros.items() if macro_name.casefold() == key),
-            None,
-        )
+        match = self.find_macro(name)
         if match is None:
             names = ", ".join(sorted(self.macros)) or "none configured"
             raise ConfigError(f"unknown macro {name!r}; configured macros: {names}")
         return match
+
+    def find_macro(self, name: str) -> Macro | None:
+        key = name.casefold()
+        return next(
+            (macro for macro_name, macro in self.macros.items() if macro_name.casefold() == key),
+            None,
+        )
 
 
 @dataclass(frozen=True)

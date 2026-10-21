@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from zyxel_cli.client import PortConfig, ProtocolError, encode_password
+from zyxel_cli.client import PortConfig, ProtocolError, ZyxelClient, ZyxelError, encode_password
 
 
 SAMPLE = """
@@ -53,3 +53,26 @@ def test_mixed_changes_form_one_atomic_target_state():
 def test_refuses_incomplete_state_to_avoid_overwriting_settings():
     with pytest.raises(ProtocolError, match="flow control, port speeds"):
         PortConfig.from_javascript("var portState='31'; var portPoE='15';")
+
+
+def test_write_verification_recovers_with_fresh_session(monkeypatch):
+    client = ZyxelClient("192.0.2.1", "secret")
+    before = PortConfig(31, 15, 0, (0, 0, 0, 0, 0))
+    after = PortConfig(29, 13, 0, (0, 0, 0, 0, 0))
+    reads = iter([before, ZyxelError("connection dropped"), after])
+    events = []
+
+    def read_config():
+        value = next(reads)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    monkeypatch.setattr(client, "get_port_config", read_config)
+    monkeypatch.setattr(client, "_request", lambda *_args, **_kwargs: "ok")
+    monkeypatch.setattr(client, "logout", lambda: events.append("logout"))
+    monkeypatch.setattr(client, "login", lambda: events.append("login"))
+    monkeypatch.setattr("zyxel_cli.client.time.sleep", lambda _seconds: None)
+
+    assert client.set_port_states(enable=[1], disable=[2]) == (before, after)
+    assert events == ["logout", "login"]

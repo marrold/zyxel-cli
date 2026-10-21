@@ -1,9 +1,11 @@
+import argparse
 from pathlib import Path
 
 import pytest
 
-from zyxel_cli.cli import _normalise_macro_invocation
-from zyxel_cli.config import ConfigError, load_config
+from zyxel_cli.cli import _normalise_macro_invocation, _resolve_changes, _show_change
+from zyxel_cli.config import ConfigError, Macro, SwitchConfig, load_config
+from zyxel_cli.client import PortConfig
 
 
 def test_missing_config_is_optional(tmp_path: Path):
@@ -96,3 +98,29 @@ def test_quoted_macro_shorthand():
         "enable RFP1",
         "--dry-run",
     ]
+
+
+def test_natural_command_spelling_prefers_matching_macro():
+    config = SwitchConfig(
+        ports={"RFP1": 1, "RFP2": 2},
+        macros={"enable RFP1": Macro(enable=("RFP1",), disable=("RFP2",))},
+    )
+    args = argparse.Namespace(command="enable", ports=["RFP1"])
+    assert _resolve_changes(args, config) == ([1], [2], "enable RFP1")
+
+
+def test_direct_command_remains_available_without_matching_macro():
+    config = SwitchConfig(ports={"RFP1": 1})
+    args = argparse.Namespace(command="enable", ports=["RFP1"])
+    assert _resolve_changes(args, config) == ([1], [], None)
+
+
+def test_change_output_uses_port_names(capsys):
+    config = SwitchConfig(ports={"RFP1": 1, "RFP2": 2})
+    before = PortConfig(31, 15, 0, (0, 0, 0, 0, 0))
+    after = PortConfig(29, 13, 0, (0, 0, 0, 0, 0))
+    _show_change(before, after, config, dry_run=True)
+    assert capsys.readouterr().out == (
+        "Proposed changes:\n"
+        "  RFP2 (port 2): Ethernet enabled -> disabled; PoE enabled -> disabled\n"
+    )

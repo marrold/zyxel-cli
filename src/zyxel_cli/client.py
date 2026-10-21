@@ -231,8 +231,31 @@ class ZyxelClient:
         if dry_run or proposed == before:
             return before, proposed
 
-        self._request("/port_state_set.cgi", proposed.form_data())
-        after = self.get_port_config()
+        write_error: ZyxelError | None = None
+        try:
+            self._request("/port_state_set.cgi", proposed.form_data())
+        except ZyxelError as error:
+            # Some firmware applies the form and then closes the HTTP response.
+            # Always attempt read-back before deciding the write failed.
+            write_error = error
+
+        try:
+            after = self.get_port_config()
+        except ZyxelError as first_error:
+            # GS1200's web server occasionally stops answering within an
+            # authenticated session after a write. Release it and verify using
+            # a fresh login, as a manually issued follow-up command would.
+            try:
+                self.logout()
+                time.sleep(1.0)
+                self.login()
+                after = self.get_port_config()
+            except ZyxelError as recovery_error:
+                detail = write_error or first_error
+                raise ProtocolError(
+                    "the write was sent but its result could not be verified; "
+                    f"check status before retrying ({detail}; recovery: {recovery_error})"
+                ) from recovery_error
         enabled_mask = sum(1 << (port - 1) for port in enable)
         disabled_mask = sum(1 << (port - 1) for port in disable)
         if (
